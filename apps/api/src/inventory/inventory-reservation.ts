@@ -12,11 +12,55 @@ export class OutOfStockError extends Error {
   }
 }
 
+function normalizeReservationItems(
+  items: readonly InventoryReservationItem[],
+): InventoryReservationItem[] {
+  const quantitiesByProduct = new Map<string, number>();
+
+  for (const item of items) {
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      throw new TypeError(
+        `Reservation quantity must be a positive integer for product ${item.productId}`,
+      );
+    }
+
+    quantitiesByProduct.set(
+      item.productId,
+      (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
+
+  return [...quantitiesByProduct.entries()]
+    .map(([productId, quantity]) => ({ productId, quantity }))
+    .sort((left, right) => left.productId.localeCompare(right.productId));
+}
+
 export async function reserveInventory(
   prisma: PrismaClient,
   items: readonly InventoryReservationItem[],
 ): Promise<void> {
-  void prisma;
-  void items;
-  throw new Error('Inventory reservation is not implemented');
+  const normalizedItems = normalizeReservationItems(items);
+
+  if (normalizedItems.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    for (const item of normalizedItems) {
+      const affectedRows = await transaction.$executeRaw`
+        UPDATE "Inventory"
+        SET
+          "available" = "available" - ${item.quantity},
+          "reserved" = "reserved" + ${item.quantity},
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE
+          "productId" = ${item.productId}
+          AND "available" >= ${item.quantity}
+      `;
+
+      if (affectedRows !== 1) {
+        throw new OutOfStockError(item.productId);
+      }
+    }
+  });
 }
