@@ -10,6 +10,11 @@ const prisma = new PrismaClient();
 
 describe('inventory reservation concurrency', () => {
   beforeEach(async () => {
+    await prisma.processingEvent.deleteMany();
+    await prisma.paymentAttempt.deleteMany();
+    await prisma.idempotencyRecord.deleteMany();
+    await prisma.orderItem.deleteMany();
+    await prisma.order.deleteMany();
     await prisma.inventory.deleteMany();
     await prisma.product.deleteMany();
   });
