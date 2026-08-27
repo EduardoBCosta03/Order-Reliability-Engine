@@ -9,10 +9,11 @@ import { PrismaService } from './database/prisma.service.js';
 import { HealthController } from './health/health.controller.js';
 import { CorrelationIdMiddleware } from './http/correlation-id.middleware.js';
 import { OrdersController } from './orders/orders.controller.js';
+import { PaymentQueueService } from './payments/payment-queue.service.js';
 
 @Module({
   controllers: [HealthController, OrdersController],
-  providers: [PrismaService],
+  providers: [PrismaService, PaymentQueueService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
