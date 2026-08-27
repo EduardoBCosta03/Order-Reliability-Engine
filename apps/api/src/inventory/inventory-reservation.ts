@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 export type InventoryReservationItem = {
   productId: string;
@@ -35,6 +35,41 @@ function normalizeReservationItems(
     .sort((left, right) => left.productId.localeCompare(right.productId));
 }
 
+async function reserveNormalizedInventory(
+  transaction: Prisma.TransactionClient,
+  items: readonly InventoryReservationItem[],
+): Promise<void> {
+  for (const item of items) {
+    const affectedRows = await transaction.$executeRaw`
+      UPDATE "Inventory"
+      SET
+        "available" = "available" - ${item.quantity},
+        "reserved" = "reserved" + ${item.quantity},
+        "updatedAt" = CURRENT_TIMESTAMP
+      WHERE
+        "productId" = ${item.productId}
+        AND "available" >= ${item.quantity}
+    `;
+
+    if (affectedRows !== 1) {
+      throw new OutOfStockError(item.productId);
+    }
+  }
+}
+
+export async function reserveInventoryInTransaction(
+  transaction: Prisma.TransactionClient,
+  items: readonly InventoryReservationItem[],
+): Promise<void> {
+  const normalizedItems = normalizeReservationItems(items);
+
+  if (normalizedItems.length === 0) {
+    return;
+  }
+
+  await reserveNormalizedInventory(transaction, normalizedItems);
+}
+
 export async function reserveInventory(
   prisma: PrismaClient,
   items: readonly InventoryReservationItem[],
@@ -45,22 +80,7 @@ export async function reserveInventory(
     return;
   }
 
-  await prisma.$transaction(async (transaction) => {
-    for (const item of normalizedItems) {
-      const affectedRows = await transaction.$executeRaw`
-        UPDATE "Inventory"
-        SET
-          "available" = "available" - ${item.quantity},
-          "reserved" = "reserved" + ${item.quantity},
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE
-          "productId" = ${item.productId}
-          AND "available" >= ${item.quantity}
-      `;
-
-      if (affectedRows !== 1) {
-        throw new OutOfStockError(item.productId);
-      }
-    }
-  });
+  await prisma.$transaction((transaction) =>
+    reserveNormalizedInventory(transaction, normalizedItems),
+  );
 }
