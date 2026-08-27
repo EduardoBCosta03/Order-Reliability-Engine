@@ -6,6 +6,7 @@ export const PROCESS_PAYMENT_JOB = 'process-payment';
 export type PaymentJobData = {
   orderId: string;
   attempt: number;
+  amountCents: number;
   correlationId?: string;
 };
 
