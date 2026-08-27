@@ -42,7 +42,10 @@ export async function dispatchPayment(
 
     const order = await transaction.order.findUniqueOrThrow({
       where: { id: orderId },
-      select: { status: true },
+      select: {
+        status: true,
+        totalCents: true,
+      },
     });
 
     if (order.status !== OrderStatus.PAYMENT_PENDING) {
@@ -74,11 +77,11 @@ export async function dispatchPayment(
       });
     }
 
-    return order.status;
+    return order;
   });
 
-  if (status !== OrderStatus.PAYMENT_PENDING) {
-    throw new PaymentDispatchStateError(orderId, status);
+  if (status.status !== OrderStatus.PAYMENT_PENDING) {
+    throw new PaymentDispatchStateError(orderId, status.status);
   }
 
   await queue.add(
@@ -86,6 +89,7 @@ export async function dispatchPayment(
     {
       orderId,
       attempt,
+      amountCents: status.totalCents,
       ...(correlationId ? { correlationId } : {}),
     },
     {
