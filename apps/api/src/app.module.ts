@@ -10,9 +10,14 @@ import { HealthController } from './health/health.controller.js';
 import { CorrelationIdMiddleware } from './http/correlation-id.middleware.js';
 import { OrdersController } from './orders/orders.controller.js';
 import { PaymentQueueService } from './payments/payment-queue.service.js';
+import { PaymentWebhooksController } from './payments/payment-webhooks.controller.js';
 
 @Module({
-  controllers: [HealthController, OrdersController],
+  controllers: [
+    HealthController,
+    OrdersController,
+    PaymentWebhooksController,
+  ],
   providers: [PrismaService, PaymentQueueService],
 })
 export class AppModule implements NestModule {
