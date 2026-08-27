@@ -5,8 +5,12 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppModule } from '../app.module.js';
+import { createPaymentQueue } from '../payments/payment-queue.js';
 
 const prisma = new PrismaClient();
+const paymentQueue = createPaymentQueue(
+  process.env.REDIS_URL ?? 'redis://localhost:6379',
+);
 
 describe('POST /orders', () => {
   let app: INestApplication;
@@ -21,6 +25,7 @@ describe('POST /orders', () => {
   });
 
   beforeEach(async () => {
+    await paymentQueue.drain(true);
     await prisma.processingEvent.deleteMany();
     await prisma.paymentAttempt.deleteMany();
     await prisma.idempotencyRecord.deleteMany();
@@ -32,6 +37,7 @@ describe('POST /orders', () => {
 
   afterAll(async () => {
     await app.close();
+    await paymentQueue.close();
     await prisma.$disconnect();
   });
 
@@ -78,11 +84,18 @@ describe('POST /orders', () => {
 
     expect(first.headers['x-correlation-id']).toBeTruthy();
     expect(first.body).toMatchObject({
-      status: 'INVENTORY_RESERVED',
+      status: 'PAYMENT_PENDING',
       totalCents: 3300,
     });
     expect(second.body.id).toBe(first.body.id);
     expect(await prisma.order.count()).toBe(1);
+
+    const jobs = await paymentQueue.getJobs(['waiting', 'delayed', 'active']);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.data).toMatchObject({
+      orderId: first.body.id,
+      attempt: 1,
+    });
 
     const inventory = await prisma.inventory.findUniqueOrThrow({
       where: { productId: product.id },
