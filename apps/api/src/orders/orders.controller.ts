@@ -5,6 +5,7 @@ import {
   Controller,
   Headers,
   HttpCode,
+  Inject,
   NotFoundException,
   Post,
   Req,
@@ -30,7 +31,10 @@ type CorrelatedRequest = {
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post()
   @HttpCode(201)
