@@ -13,8 +13,10 @@ export class OutOfStockError extends Error {
 }
 
 export async function reserveInventory(
-  _prisma: PrismaClient,
-  _items: readonly InventoryReservationItem[],
+  prisma: PrismaClient,
+  items: readonly InventoryReservationItem[],
 ): Promise<void> {
+  void prisma;
+  void items;
   throw new Error('Inventory reservation is not implemented');
 }
