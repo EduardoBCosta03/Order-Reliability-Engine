@@ -14,6 +14,11 @@ import {
 import { PrismaService } from '../database/prisma.service.js';
 import { OutOfStockError } from '../inventory/inventory-reservation.js';
 import {
+  dispatchPayment,
+  PaymentDispatchStateError,
+} from '../payments/dispatch-payment.js';
+import { PaymentQueueService } from '../payments/payment-queue.service.js';
+import {
   createOrder,
   type CreateOrderItem,
   type CreatedOrder,
@@ -34,6 +39,8 @@ export class OrdersController {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(PaymentQueueService)
+    private readonly paymentQueue: PaymentQueueService,
   ) {}
 
   @Post()
@@ -48,19 +55,46 @@ export class OrdersController {
     }
 
     try {
-      return await createOrder(this.prisma, {
+      const order = await createOrder(this.prisma, {
         idempotencyKey: idempotencyKey ?? '',
         items: body.items,
         ...(request.correlationId
           ? { correlationId: request.correlationId }
           : {}),
       });
+
+      if (
+        order.status === 'INVENTORY_RESERVED' ||
+        order.status === 'PAYMENT_PENDING'
+      ) {
+        await dispatchPayment(
+          this.prisma,
+          this.paymentQueue.queue,
+          order.id,
+          request.correlationId,
+        );
+
+        return await this.prisma.order.findUniqueOrThrow({
+          where: { id: order.id },
+          select: {
+            id: true,
+            status: true,
+            totalCents: true,
+          },
+        });
+      }
+
+      return order;
     } catch (error) {
       if (error instanceof IdempotencyConflictError) {
         throw new ConflictException(error.message);
       }
 
       if (error instanceof OutOfStockError) {
+        throw new ConflictException(error.message);
+      }
+
+      if (error instanceof PaymentDispatchStateError) {
         throw new ConflictException(error.message);
       }
 
