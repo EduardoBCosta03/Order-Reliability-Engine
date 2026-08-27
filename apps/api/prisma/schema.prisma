@@ -51,6 +51,7 @@ model Order {
   idempotency    IdempotencyRecord?
   payments       PaymentAttempt[]
   events         ProcessingEvent[]
+  webhooks       PaymentWebhookEvent[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 }
@@ -98,6 +99,17 @@ model ProcessingEvent {
   payload       Json?
   correlationId String?
   createdAt     DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model PaymentWebhookEvent {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payload   Json
+  createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
 }
