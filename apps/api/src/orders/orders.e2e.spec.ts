@@ -57,14 +57,24 @@ describe('POST /orders', () => {
     const first = await request(app.getHttpServer())
       .post('/orders')
       .set('Idempotency-Key', 'http-checkout-001')
-      .send(payload)
-      .expect(201);
+      .send(payload);
+
+    if (first.status !== 201) {
+      throw new Error(
+        `Expected first POST /orders to return 201, got ${first.status}: ${JSON.stringify(first.body)}`,
+      );
+    }
 
     const second = await request(app.getHttpServer())
       .post('/orders')
       .set('Idempotency-Key', 'http-checkout-001')
-      .send(payload)
-      .expect(201);
+      .send(payload);
+
+    if (second.status !== 201) {
+      throw new Error(
+        `Expected duplicate POST /orders to return 201, got ${second.status}: ${JSON.stringify(second.body)}`,
+      );
+    }
 
     expect(first.headers['x-correlation-id']).toBeTruthy();
     expect(first.body).toMatchObject({
