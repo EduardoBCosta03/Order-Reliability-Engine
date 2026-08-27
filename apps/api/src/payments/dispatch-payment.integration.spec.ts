@@ -66,6 +66,7 @@ describe('payment dispatch', () => {
     expect(jobs[0]?.data).toMatchObject({
       orderId: order.id,
       attempt: 1,
+      amountCents: 4200,
       correlationId: 'corr-001',
     });
   });
