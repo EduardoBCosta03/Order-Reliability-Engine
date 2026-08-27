@@ -4,21 +4,33 @@
 
 A production-oriented order processing system built to explore the failure modes that make checkout systems difficult in the real world: **duplicate requests, concurrent inventory updates, asynchronous payments, retries, compensation, and operational visibility**.
 
-> **Status:** foundation in active development. The repository is being built in public; implemented capabilities are documented separately from planned ones.
+> **Status:** Phase 1 foundation is implemented. The end-to-end reliable order flow is the next phase.
 
-## What this project demonstrates
+## Implemented foundation
 
-- TypeScript and NestJS backend engineering
-- PostgreSQL transactional consistency
-- Redis and BullMQ background processing
-- idempotent request and callback handling
-- explicit order lifecycle transitions
-- concurrency-safe inventory reservation
-- retry and compensation workflows
-- structured operational events and correlation IDs
-- Docker-based local infrastructure
-- GitHub Actions CI
-- a minimal Next.js operational UI
+- pnpm TypeScript monorepo with explicit runtime boundaries
+- NestJS API with `GET /health`
+- request correlation ID generation and propagation
+- separate NestJS fake payment gateway with `GET /health`
+- BullMQ payment worker boundary and Redis connection parsing
+- tested shared order state machine
+- PostgreSQL and Redis local infrastructure through Docker Compose
+- GitHub Actions pipeline for lint, typecheck, tests, and production builds
+- minimal Next.js operational dashboard shell
+- architecture documentation and ADRs
+
+## Reliability problems this project targets
+
+The next implementation phase builds the actual order workflow around:
+
+- idempotent order creation and payment callbacks
+- database-backed concurrency control for inventory
+- asynchronous payment processing through BullMQ
+- bounded retries for transient dependency failures
+- compensation after permanent payment failure
+- durable processing events and operational visibility
+
+Those behaviors are intentionally **not** presented as complete until their tests and implementations land.
 
 ## Architecture
 
@@ -43,11 +55,13 @@ A production-oriented order processing system built to explore the failure modes
                               payment callback+----------------+
 ```
 
-The API owns order state and transactional invariants. Payment work is queued rather than performed inside HTTP requests. A separate fake gateway behaves like an external dependency so retries, duplicate callbacks, and failures can be exercised deliberately.
+The API owns order state and transactional invariants. Payment work is queued rather than performed inside HTTP requests. The fake gateway is a separate runtime so failures, retries, and callbacks can be modeled as interactions with an external dependency.
 
-See [docs/architecture.md](docs/architecture.md) for the component boundaries and [the design spec](docs/superpowers/specs/2026-08-27-order-reliability-engine-design.md) for the complete intent.
+See [docs/architecture.md](docs/architecture.md) for component boundaries and [the design spec](docs/superpowers/specs/2026-08-27-order-reliability-engine-design.md) for the full project intent.
 
-## Planned order lifecycle
+## Order lifecycle
+
+The shared state machine is already implemented and tested:
 
 ```text
 CREATED
@@ -58,7 +72,7 @@ CREATED
           -> CANCELLED
 ```
 
-Every transition is explicit. Invalid state jumps are rejected.
+Invalid state jumps are rejected by the domain rule.
 
 ## Repository layout
 
@@ -73,17 +87,24 @@ packages/
 docs/
   architecture.md
   decisions/
-infra/
-  docker/
+  superpowers/
+.github/
+  workflows/
 ```
 
-## Local infrastructure
+## Run locally
 
 Requirements:
 
 - Node.js 22+
 - pnpm 10+
 - Docker with Compose
+
+Install dependencies:
+
+```bash
+pnpm install
+```
 
 Start PostgreSQL and Redis:
 
@@ -92,17 +113,31 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Install dependencies and run repository checks:
+Run the available applications in separate terminals:
 
 ```bash
-pnpm install
+pnpm --filter @ore/api dev
+pnpm --filter @ore/worker dev
+pnpm --filter @ore/fake-gateway dev
+pnpm --filter @ore/web dev
+```
+
+Default local ports:
+
+- Web: `http://localhost:3000`
+- API health: `http://localhost:3001/health`
+- Fake gateway health: `http://localhost:3002/health`
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+
+Run the same verification gates used by CI:
+
+```bash
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
 ```
-
-Application-specific development commands will be documented as each component becomes executable.
 
 ## Engineering decisions
 
@@ -123,4 +158,4 @@ The useful engineering questions are:
 - How do we recover reserved inventory after a permanent payment failure?
 - How can an operator understand what happened after the fact?
 
-Those are the behaviors this repository is designed to make visible and testable.
+The repository is being built so each answer is visible in code, tests, and operational behavior rather than only described in a README.
