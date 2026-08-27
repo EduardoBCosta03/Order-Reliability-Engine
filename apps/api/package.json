@@ -8,16 +8,20 @@
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
+    "@prisma/client": "^6.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "prisma": "^6.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

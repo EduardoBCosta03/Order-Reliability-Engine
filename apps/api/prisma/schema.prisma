@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  CREATED
+  INVENTORY_RESERVED
+  PAYMENT_PENDING
+  PAYMENT_FAILED
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  sku            String      @unique
+  name           String
+  unitPriceCents Int
+  inventory      Inventory?
+  orderItems     OrderItem[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Inventory {
+  productId String   @id
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  available Int
+  reserved  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id             String              @id @default(uuid())
+  status         OrderStatus         @default(CREATED)
+  totalCents     Int
+  idempotencyKey String              @unique
+  requestHash    String
+  items          OrderItem[]
+  idempotency    IdempotencyRecord?
+  payments       PaymentAttempt[]
+  events         ProcessingEvent[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model OrderItem {
+  id             String  @id @default(uuid())
+  orderId        String
+  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  skuSnapshot    String
+  nameSnapshot   String
+  quantity       Int
+  unitPriceCents Int
+}
+
+model IdempotencyRecord {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  requestHash String
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model PaymentAttempt {
+  id          String        @id @default(uuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      PaymentStatus @default(PENDING)
+  attempt     Int
+  providerRef String?       @unique
+  errorCode   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([orderId, attempt])
+}
+
+model ProcessingEvent {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type          String
+  payload       Json?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
